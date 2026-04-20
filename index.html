@@ -5,13 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏗️ İnşaat Maliyet Takip</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#0f1117;--bg2:#1a1d2b;--border:rgba(255,255,255,0.08);
   --text:#E2E8F0;--text2:#94A3B8;--text3:#64748B;
-  --gold:#F59E0B;--gold2:#D97706;--red:#EF4444;--green:#10B981;
+  --gold:#F59E0B;--gold2:#D97706;--red:#EF4444;--green:#10B981;--blue:#3B82F6;
 }
 body{font-family:'DM Sans','Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 .app{max-width:760px;margin:0 auto;padding:0 16px 60px}
@@ -25,6 +27,20 @@ body{font-family:'DM Sans','Segoe UI',system-ui,sans-serif;background:var(--bg);
 .btn-add:hover{opacity:.88}
 .btn-sec{background:rgba(255,255,255,0.07);color:var(--text2);border:1px solid var(--border);border-radius:10px;padding:10px 16px;font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap;font-family:inherit}
 .btn-sec:hover{background:rgba(255,255,255,0.12)}
+
+/* SYNC STATUS BAR */
+.sync-bar{display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:10px;margin-bottom:16px;font-size:12px;font-weight:600;border:1px solid transparent;transition:all .3s}
+.sync-bar.online{background:rgba(16,185,129,0.08);border-color:rgba(16,185,129,0.2);color:var(--green)}
+.sync-bar.offline{background:rgba(100,116,139,0.08);border-color:rgba(100,116,139,0.15);color:var(--text3)}
+.sync-bar.syncing{background:rgba(245,158,11,0.08);border-color:rgba(245,158,11,0.2);color:var(--gold)}
+.sync-bar.error{background:rgba(239,68,68,0.08);border-color:rgba(239,68,68,0.2);color:var(--red)}
+.sync-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.sync-bar.online .sync-dot{background:var(--green);box-shadow:0 0 6px var(--green)}
+.sync-bar.offline .sync-dot{background:var(--text3)}
+.sync-bar.syncing .sync-dot{background:var(--gold);animation:pulse 1s infinite}
+.sync-bar.error .sync-dot{background:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.sync-time{margin-left:auto;font-weight:400;font-size:11px;color:var(--text3)}
 
 /* PROJECTS */
 .project-bar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:22px}
@@ -44,14 +60,6 @@ body{font-family:'DM Sans','Segoe UI',system-ui,sans-serif;background:var(--bg);
 .total-right{text-align:right}
 .total-count{font-size:12px;color:var(--text3)}
 .total-project{font-size:11px;color:var(--gold);font-weight:600;margin-top:3px}
-.cat-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:10px;margin-bottom:14px}
-.cat-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:4px}
-.cat-card-header{display:flex;align-items:center;gap:8px}
-.cat-card-header span{font-size:12px;color:var(--text2);font-weight:600}
-.cat-card .cat-amount{font-size:17px;font-weight:700}
-.cat-bar{height:4px;background:rgba(255,255,255,0.07);border-radius:2px;overflow:hidden;margin-top:4px}
-.cat-bar-fill{height:100%;border-radius:2px}
-.cat-percent{font-size:11px;color:var(--text3)}
 
 /* CAT BREAKDOWN */
 .cat-breakdown{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:16px 20px;margin-bottom:16px}
@@ -120,7 +128,7 @@ textarea.form-input{resize:vertical;min-height:68px}
 .btn-outline{background:rgba(255,255,255,0.06);border:1px solid var(--border);color:var(--text2);border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
 .btn-outline:hover{background:rgba(255,255,255,0.1)}
 
-/* CAT MANAGEMENT */
+/* CAT MGMT */
 .cat-mgmt-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;background:rgba(255,255,255,0.03);border:1px solid var(--border);margin-bottom:6px}
 .cat-mgmt-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 .cat-mgmt-icon{font-size:18px;flex-shrink:0}
@@ -155,18 +163,8 @@ textarea.form-input{resize:vertical;min-height:68px}
 .step.active{color:var(--gold);border-color:var(--gold)}
 .step.done{color:var(--green);border-color:var(--green)}
 .import-result{background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);border-radius:10px;padding:16px;text-align:center}
-.import-result .ri-icon{font-size:36px}
 .import-result p{color:var(--green);font-weight:700;font-size:16px;margin:8px 0 4px}
 .import-result small{color:var(--text3);font-size:12px}
-
-/* GITHUB SYNC */
-.gh-status{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:10px;margin-bottom:4px;font-size:13px;font-weight:600}
-.gh-status.connected{background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);color:var(--green)}
-.gh-status.disconnected{background:rgba(100,116,139,0.1);border:1px solid rgba(100,116,139,0.2);color:var(--text3)}
-.gh-status.error{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);color:var(--red)}
-.gh-status.syncing{background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);color:var(--gold)}
-.btn-outline{background:rgba(255,255,255,0.06);border:1px solid var(--border);color:var(--text2);border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
-.btn-outline:hover{background:rgba(255,255,255,0.1)}
 
 /* TOAST */
 .toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(80px);background:#1E293B;border:1px solid var(--gold);color:var(--gold);padding:11px 22px;border-radius:10px;font-size:13px;font-weight:600;z-index:999;transition:transform .3s;white-space:nowrap}
@@ -174,9 +172,10 @@ textarea.form-input{resize:vertical;min-height:68px}
 
 @media(max-width:480px){
   .total-left .amount{font-size:28px}
-  .cat-cards{grid-template-columns:repeat(2,1fr)}
   .cat-row-left{width:100px}
   .cat-row-amount{width:90px;font-size:12px}
+  .hdr-btns{gap:6px}
+  .btn-sec{padding:9px 12px;font-size:12px}
 }
 </style>
 </head>
@@ -185,14 +184,20 @@ textarea.form-input{resize:vertical;min-height:68px}
   <div class="header">
     <div>
       <h1>🏗️ İnşaat Maliyet Takip</h1>
-      <p>Tüm inşaat giderlerinizi tek yerden yönetin</p>
+      <p id="headerSub">Tüm inşaat giderlerinizi tek yerden yönetin</p>
     </div>
     <div class="hdr-btns">
-      <button class="btn-sec" id="ghStatusBtn" onclick="openGhModal()" title="GitHub Sync">☁️ GitHub</button>
       <button class="btn-sec" onclick="openCatModal()">🏷️ Kategoriler</button>
       <button class="btn-sec" onclick="openImportModal()">📂 Yükle</button>
       <button class="btn-add" onclick="openEntryModal()">+ Gider Ekle</button>
     </div>
+  </div>
+
+  <!-- Firebase Sync Status -->
+  <div class="sync-bar offline" id="syncBar">
+    <div class="sync-dot"></div>
+    <span id="syncMsg">Firebase'e bağlanılıyor...</span>
+    <span class="sync-time" id="syncTime"></span>
   </div>
 
   <div class="project-bar" id="projectBar"></div>
@@ -222,57 +227,7 @@ textarea.form-input{resize:vertical;min-height:68px}
   <div class="entries" id="entriesList"></div>
 </div>
 
-<!-- GITHUB MODAL -->
-<div class="overlay" id="ghOverlay" onclick="if(event.target===this)closeGhModal()">
-  <div class="modal" style="max-width:480px">
-    <div class="modal-header">
-      <h2>☁️ GitHub Sync Ayarları</h2>
-      <button class="modal-close" onclick="closeGhModal()">✕</button>
-    </div>
-    <div class="form-body">
-      <div id="ghStatusBox"></div>
-
-      <div class="form-group">
-        <label class="form-label">GitHub Token <span style="color:var(--red)">*</span></label>
-        <input class="form-input" id="ghToken" type="password" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
-        <small style="color:var(--text3);font-size:11px;margin-top:4px;display:block">
-          <a href="https://github.com/settings/tokens/new?scopes=repo&description=InsaatMaliyet" target="_blank" style="color:var(--gold)">Buradan oluşturun</a> — <b>repo</b> yetkisi seçin
-        </small>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Kullanıcı Adı / Org</label>
-        <input class="form-input" id="ghOwner" placeholder="kullaniciadi">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Repo Adı</label>
-        <input class="form-input" id="ghRepo" placeholder="insaat-maliyet">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Dosya Yolu</label>
-        <input class="form-input" id="ghPath" placeholder="data/maliyet.json" value="data/maliyet.json">
-      </div>
-      <div style="display:flex;gap:8px">
-        <button class="btn-outline" onclick="testGhConnection()" style="flex:1">🔍 Bağlantıyı Test Et</button>
-        <button class="btn-submit" onclick="saveGhSettings()" style="flex:1">Kaydet</button>
-      </div>
-      <div style="border-top:1px solid var(--border);padding-top:14px;display:flex;gap:8px">
-        <button class="btn-submit" onclick="ghPush()" style="flex:1;background:linear-gradient(135deg,#1d4ed8,#1e40af)">⬆️ GitHub'a Kaydet</button>
-        <button class="btn-submit" onclick="ghPull()" style="flex:1;background:linear-gradient(135deg,#059669,#047857)">⬇️ GitHub'dan Yükle</button>
-      </div>
-      <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;padding:12px">
-        <p style="font-size:11px;color:var(--text3);line-height:1.7">
-          💡 <b style="color:var(--text2)">Nasıl çalışır?</b><br>
-          Verileriniz GitHub repo'nuzda bir JSON dosyası olarak saklanır.<br>
-          <b>⬆️ Kaydet</b> → Mevcut veriyi GitHub'a yazar<br>
-          <b>⬇️ Yükle</b> → GitHub'daki veriyi çekip uygulamaya yükler<br>
-          Tüm cihazlardan aynı token + repo bilgilerini girerek ortak veri kullanabilirsiniz.
-        </p>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- GİDER EKLE MODAL -->
+<!-- GİDER MODAL -->
 <div class="overlay" id="entryOverlay" onclick="if(event.target===this)closeEntryModal()">
   <div class="modal">
     <div class="modal-header">
@@ -352,7 +307,26 @@ textarea.form-input{resize:vertical;min-height:68px}
 <div class="toast" id="toast"></div>
 
 <script>
-// ── Default & dynamic categories ───────────────────────────────────
+// ══════════════════════════════════════════════════════
+// FIREBASE CONFIG
+// ══════════════════════════════════════════════════════
+const firebaseConfig = {
+  apiKey: "AIzaSyCgcte9R8E29r_8nKCnSErMXGxNA-FD8QY",
+  authDomain: "goldenkeyinsaat.firebaseapp.com",
+  projectId: "goldenkeyinsaat",
+  storageBucket: "goldenkeyinsaat.firebasestorage.app",
+  messagingSenderId: "855772462571",
+  appId: "1:855772462571:web:f46ebca3b684ad8d99edae",
+  databaseURL: "https://goldenkey-9d8cd-default-rtdb.europe-west1.firebasedatabase.app"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const DB_REF = 'insaat/v1';
+
+// ══════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════
 const DEFAULT_CATS = [
   {id:'malzeme', label:'Malzeme',  icon:'🧱', color:'#D97706'},
   {id:'iscilik', label:'İşçilik',  icon:'👷', color:'#2563EB'},
@@ -362,733 +336,508 @@ const DEFAULT_CATS = [
   {id:'diger',   label:'Diğer',    icon:'📦', color:'#6B7280'},
 ];
 let CATS = [...DEFAULT_CATS];
-
-// ── GitHub Config ──────────────────────────────────────────────────
-let GH = {token:'', owner:'', repo:'', path:'data/maliyet.json'};
-
-function loadGhConfig() {
-  try {
-    const raw = localStorage.getItem('insaat-gh');
-    if (raw) GH = JSON.parse(raw);
-  } catch(e) {}
-}
-function saveGhConfig() {
-  localStorage.setItem('insaat-gh', JSON.stringify(GH));
-}
-function ghConfigured() {
-  return GH.token && GH.owner && GH.repo && GH.path;
-}
-
-// ── State ──────────────────────────────────────────────────────────
 let S = {entries:[], projects:['Genel'], activeProject:'Genel', cats:null};
+let fbListenerActive = false;
+let isSyncing = false;
 
-function loadState() {
-  try {
-    const raw = localStorage.getItem('insaat-v2');
-    if (raw) S = JSON.parse(raw);
-    if (!S.projects?.length)   S.projects = ['Genel'];
-    if (!S.activeProject)      S.activeProject = 'Genel';
-    if (!S.entries)            S.entries = [];
-    if (!S.cats?.length)       S.cats = JSON.parse(JSON.stringify(DEFAULT_CATS));
-    CATS = S.cats;
-  } catch(e) { console.warn(e); }
+// ══════════════════════════════════════════════════════
+// SYNC STATUS
+// ══════════════════════════════════════════════════════
+function setSyncStatus(type, msg, time) {
+  const bar  = document.getElementById('syncBar');
+  const msgEl= document.getElementById('syncMsg');
+  const timeEl=document.getElementById('syncTime');
+  bar.className = 'sync-bar ' + type;
+  msgEl.textContent = msg;
+  timeEl.textContent = time || '';
 }
 
-function saveState() {
+// ══════════════════════════════════════════════════════
+// FIREBASE READ/WRITE
+// ══════════════════════════════════════════════════════
+function initFirebase() {
+  setSyncStatus('syncing', '🔄 Bağlanılıyor...');
+
+  // Listen for real-time updates
+  db.ref(DB_REF).on('value', snapshot => {
+    const data = snapshot.val();
+    if (data) {
+      // Only update if data differs (avoid re-render on own writes)
+      const incoming = JSON.stringify(data);
+      const current  = JSON.stringify({entries:S.entries, projects:S.projects, activeProject:S.activeProject, cats:CATS});
+      if (incoming !== current) {
+        S = data;
+        if (!S.projects?.length)  S.projects = ['Genel'];
+        if (!S.activeProject)     S.activeProject = 'Genel';
+        if (!S.entries)           S.entries = [];
+        if (!S.cats?.length)      S.cats = JSON.parse(JSON.stringify(DEFAULT_CATS));
+        CATS = S.cats;
+        // Preserve active project selection if still valid
+        if (!S.projects.includes(S.activeProject)) S.activeProject = S.projects[0] || 'Genel';
+        render();
+      }
+    }
+    const now = new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'});
+    setSyncStatus('online', '🟢 Canlı senkronizasyon aktif', 'Son güncelleme: ' + now);
+    fbListenerActive = true;
+  }, err => {
+    setSyncStatus('error', '❌ Bağlantı hatası: ' + err.message);
+    // Fall back to localStorage
+    loadLocal();
+    render();
+  });
+
+  // Connection state
+  db.ref('.info/connected').on('value', snap => {
+    if (!snap.val()) setSyncStatus('offline', '🔌 Çevrimdışı — değişiklikler kaydedilecek');
+  });
+}
+
+async function saveState() {
   S.cats = CATS;
-  localStorage.setItem('insaat-v2', JSON.stringify(S));
-}
+  // Always save locally as backup
+  try { localStorage.setItem('insaat-v2-backup', JSON.stringify(S)); } catch(e) {}
 
-function updateGhStatusBtn() {
-  const btn = document.getElementById('ghStatusBtn');
-  if (!btn) return;
-  if (!ghConfigured()) {
-    btn.textContent = '☁️ GitHub';
-    btn.style.color = '';
-  } else {
-    btn.textContent = '✅ GitHub';
-    btn.style.color = 'var(--green)';
+  if (!fbListenerActive && !isSyncing) {
+    setSyncStatus('syncing', '⬆️ Kaydediliyor...');
+  }
+  try {
+    await db.ref(DB_REF).set(S);
+  } catch(e) {
+    setSyncStatus('error', '❌ Kayıt hatası — çevrimdışı modda çalışıyor');
+    console.warn('Firebase write error:', e);
   }
 }
 
-// ── Helpers ────────────────────────────────────────────────────────
+function loadLocal() {
+  try {
+    const raw = localStorage.getItem('insaat-v2-backup') || localStorage.getItem('insaat-v2');
+    if (raw) {
+      S = JSON.parse(raw);
+      if (!S.projects?.length)  S.projects = ['Genel'];
+      if (!S.activeProject)     S.activeProject = 'Genel';
+      if (!S.entries)           S.entries = [];
+      if (!S.cats?.length)      S.cats = JSON.parse(JSON.stringify(DEFAULT_CATS));
+      CATS = S.cats;
+    }
+  } catch(e) {}
+}
+
+// ══════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════
 const fmt = v => new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(v);
-const fmtDate = d => { try { return new Date(d).toLocaleDateString('tr-TR',{day:'numeric',month:'short',year:'numeric'}); } catch(e){ return d; } };
+const fmtDate = d => { try{return new Date(d).toLocaleDateString('tr-TR',{day:'numeric',month:'short',year:'numeric'});}catch(e){return d;} };
 const todayStr = () => new Date().toISOString().split('T')[0];
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
 const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-function getCat(id) { return CATS.find(c => c.id === id) || {id:'diger',label:'Diğer',icon:'📦',color:'#6B7280'}; }
+function getCat(id) { return CATS.find(c=>c.id===id) || {id:'diger',label:'Diğer',icon:'📦',color:'#6B7280'}; }
 function toast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2200);
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2200);
 }
 
-// ── Projects ───────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════
+// PROJECTS
+// ══════════════════════════════════════════════════════
 function renderProjects() {
-  let html = '';
+  let html='';
   S.projects.forEach(p => {
-    const a = p === S.activeProject ? 'active' : '';
-    html += '<div style="display:flex;align-items:center">';
-    html += '<button class="proj-tab ' + a + '" onclick="switchProject(\'' + esc(p) + '\')">' + esc(p) + '</button>';
-    if (p !== 'Genel' && p === S.activeProject) {
-      html += '<button class="proj-del" onclick="deleteProject(\'' + esc(p) + '\')" title="Projeyi Sil">×</button>';
-    }
-    html += '</div>';
+    const a=p===S.activeProject?'active':'';
+    html+='<div style="display:flex;align-items:center">';
+    html+='<button class="proj-tab '+a+'" onclick="switchProject(\''+esc(p)+'\')">'+esc(p)+'</button>';
+    if(p!=='Genel'&&p===S.activeProject)
+      html+='<button class="proj-del" onclick="deleteProject(\''+esc(p)+'\')" title="Projeyi Sil">×</button>';
+    html+='</div>';
   });
-  html += '<button class="proj-add-btn" onclick="showProjInput()">+ Proje</button>';
-  html += '<span id="projInputArea"></span>';
-  document.getElementById('projectBar').innerHTML = html;
+  html+='<button class="proj-add-btn" onclick="showProjInput()">+ Proje</button>';
+  html+='<span id="projInputArea"></span>';
+  document.getElementById('projectBar').innerHTML=html;
 }
-
-function showProjInput() {
-  document.getElementById('projInputArea').innerHTML =
-    '<span class="proj-input-wrap">' +
-    '<input class="proj-input" id="projNameInput" placeholder="Proje adı" onkeydown="if(event.key===\'Enter\')addProject()">' +
-    '<button class="proj-ok" onclick="addProject()">✓</button>' +
-    '<button class="proj-cancel" onclick="renderProjects()">✕</button>' +
+function showProjInput(){
+  document.getElementById('projInputArea').innerHTML=
+    '<span class="proj-input-wrap">'+
+    '<input class="proj-input" id="projNameInput" placeholder="Proje adı" onkeydown="if(event.key===\'Enter\')addProject()">'+
+    '<button class="proj-ok" onclick="addProject()">✓</button>'+
+    '<button class="proj-cancel" onclick="renderProjects()">✕</button>'+
     '</span>';
-  setTimeout(() => document.getElementById('projNameInput')?.focus(), 50);
+  setTimeout(()=>document.getElementById('projNameInput')?.focus(),50);
 }
-
-function addProject() {
-  const name = document.getElementById('projNameInput')?.value.trim();
-  if (!name || S.projects.includes(name)) { toast('Geçersiz veya var olan proje adı'); return; }
-  S.projects.push(name);
-  S.activeProject = name;
+function addProject(){
+  const name=document.getElementById('projNameInput')?.value.trim();
+  if(!name||S.projects.includes(name)){toast('Geçersiz veya var olan proje adı');return;}
+  S.projects.push(name); S.activeProject=name;
   saveState(); render();
 }
-
-function switchProject(p) {
-  S.activeProject = p;
-  document.getElementById('catFilter').value = 'all';
+function switchProject(p){
+  S.activeProject=p;
+  document.getElementById('catFilter').value='all';
   saveState(); render();
 }
-
-function deleteProject(p) {
-  if (!confirm('"' + p + '" projesi ve tüm giderleri silinecek. Emin misiniz?')) return;
-  S.projects = S.projects.filter(x => x !== p);
-  S.entries  = S.entries.filter(e => e.project !== p);
-  S.activeProject = 'Genel';
+function deleteProject(p){
+  if(!confirm('"'+p+'" projesi ve tüm giderleri silinecek. Emin misiniz?'))return;
+  S.projects=S.projects.filter(x=>x!==p);
+  S.entries=S.entries.filter(e=>e.project!==p);
+  S.activeProject='Genel';
   saveState(); render(); toast('Proje silindi');
 }
 
-// ── Summary ────────────────────────────────────────────────────────
-function renderSummary() {
-  const proj  = S.entries.filter(e => e.project === S.activeProject);
-  const total = proj.reduce((s,e) => s + e.amount, 0);
-  let html = '<div class="total-card">' +
-    '<div class="total-left"><label>Toplam Maliyet</label><div class="amount">' + fmt(total) + '</div></div>' +
-    '<div class="total-right"><div class="total-project">📁 ' + esc(S.activeProject) + '</div>' +
-    '<div class="total-count">' + proj.length + ' kayıt</div></div></div>';
-
-  document.getElementById('summarySection').innerHTML = html;
+// ══════════════════════════════════════════════════════
+// SUMMARY & BREAKDOWN
+// ══════════════════════════════════════════════════════
+function renderSummary(){
+  const proj=S.entries.filter(e=>e.project===S.activeProject);
+  const total=proj.reduce((s,e)=>s+e.amount,0);
+  document.getElementById('summarySection').innerHTML=
+    '<div class="total-card">'+
+    '<div class="total-left"><label>Toplam Maliyet</label><div class="amount">'+fmt(total)+'</div></div>'+
+    '<div class="total-right"><div class="total-project">📁 '+esc(S.activeProject)+'</div>'+
+    '<div class="total-count">'+proj.length+' kayıt</div></div></div>';
+}
+function renderCatBreakdown(){
+  const proj=S.entries.filter(e=>e.project===S.activeProject);
+  const total=proj.reduce((s,e)=>s+e.amount,0);
+  const el=document.getElementById('catBreakdown');
+  if(!proj.length){el.innerHTML='';return;}
+  const used=CATS
+    .map(c=>({...c,total:proj.filter(e=>e.category===c.id).reduce((s,e)=>s+e.amount,0),count:proj.filter(e=>e.category===c.id).length}))
+    .filter(c=>c.count>0).sort((a,b)=>b.total-a.total);
+  let rows='';
+  used.forEach(c=>{
+    const pct=total?(c.total/total*100):0;
+    rows+='<div class="cat-row">'+
+      '<div class="cat-row-left"><span class="cat-row-icon">'+c.icon+'</span><span class="cat-row-name">'+esc(c.label)+'</span></div>'+
+      '<div class="cat-row-bar-wrap"><div class="cat-row-bar" style="width:'+pct.toFixed(1)+'%;background:'+c.color+'"></div></div>'+
+      '<div class="cat-row-amount">'+fmt(c.total)+'</div>'+
+      '<div class="cat-row-pct">'+pct.toFixed(1)+'%</div></div>';
+  });
+  el.innerHTML='<div class="cat-breakdown"><div class="cat-breakdown-title">📊 Kategori Bazlı Dağılım</div><div class="cat-breakdown-rows">'+rows+'</div></div>';
 }
 
-// ── Cat Breakdown ──────────────────────────────────────────────────
-function renderCatBreakdown() {
-  const proj  = S.entries.filter(e => e.project === S.activeProject);
-  const total = proj.reduce((s,e) => s + e.amount, 0);
-  const el    = document.getElementById('catBreakdown');
-  if (!proj.length) { el.innerHTML = ''; return; }
-  const used = CATS
-    .map(c => ({...c, total: proj.filter(e => e.category===c.id).reduce((s,e)=>s+e.amount,0), count: proj.filter(e=>e.category===c.id).length}))
-    .filter(c => c.count > 0).sort((a,b) => b.total - a.total);
-  let rows = '';
-  used.forEach(c => {
-    const pct = total ? (c.total / total * 100) : 0;
-    rows += '<div class="cat-row">' +
-      '<div class="cat-row-left"><span class="cat-row-icon">' + c.icon + '</span><span class="cat-row-name">' + esc(c.label) + '</span></div>' +
-      '<div class="cat-row-bar-wrap"><div class="cat-row-bar" style="width:' + pct.toFixed(1) + '%;background:' + c.color + '"></div></div>' +
-      '<div class="cat-row-amount">' + fmt(c.total) + '</div>' +
-      '<div class="cat-row-pct">' + pct.toFixed(1) + '%</div></div>';
+// ══════════════════════════════════════════════════════
+// ENTRIES
+// ══════════════════════════════════════════════════════
+function renderEntries(){
+  const sel=document.getElementById('catFilter');
+  const cur=sel.value;
+  sel.innerHTML='<option value="all">Tüm Kategoriler</option>'+
+    CATS.map(c=>'<option value="'+c.id+'">'+c.icon+' '+esc(c.label)+'</option>').join('');
+  sel.value=CATS.find(c=>c.id===cur)?cur:'all';
+  const fv=sel.value, srt=document.getElementById('sortBy').value;
+  const proj=S.entries.filter(e=>e.project===S.activeProject);
+  const filtered=fv==='all'?proj:proj.filter(e=>e.category===fv);
+  const sorted=[...filtered].sort((a,b)=>{
+    if(srt==='date-desc') return new Date(b.date)-new Date(a.date);
+    if(srt==='date-asc')  return new Date(a.date)-new Date(b.date);
+    if(srt==='amount-desc') return b.amount-a.amount;
+    return a.amount-b.amount;
   });
-  el.innerHTML = '<div class="cat-breakdown"><div class="cat-breakdown-title">📊 Kategori Bazlı Dağılım</div><div class="cat-breakdown-rows">' + rows + '</div></div>';
-}
-
-// ── Entries ────────────────────────────────────────────────────────
-function renderEntries() {
-  const sel = document.getElementById('catFilter');
-  const cur = sel.value;
-  sel.innerHTML = '<option value="all">Tüm Kategoriler</option>' +
-    CATS.map(c => '<option value="' + c.id + '">' + c.icon + ' ' + esc(c.label) + '</option>').join('');
-  sel.value = CATS.find(c => c.id === cur) ? cur : 'all';
-  const fv  = sel.value;
-  const srt = document.getElementById('sortBy').value;
-  const proj = S.entries.filter(e => e.project === S.activeProject);
-  const filtered = fv === 'all' ? proj : proj.filter(e => e.category === fv);
-  const sorted = [...filtered].sort((a,b) => {
-    if (srt==='date-desc')   return new Date(b.date) - new Date(a.date);
-    if (srt==='date-asc')    return new Date(a.date) - new Date(b.date);
-    if (srt==='amount-desc') return b.amount - a.amount;
-    return a.amount - b.amount;
-  });
-  document.getElementById('filterBar').style.display = proj.length ? 'block' : 'none';
-  const list = document.getElementById('entriesList');
-  if (!sorted.length) {
-    list.innerHTML = '<div class="empty-state"><div class="emoji">📝</div>' +
-      '<p>' + (proj.length===0 ? 'Henüz gider kaydı yok' : 'Bu kategoride kayıt yok') + '</p>' +
-      '<small>' + (proj.length===0 ? '"Gider Ekle" butonu ile başlayın' : 'Filtreyi değiştirmeyi deneyin') + '</small></div>';
+  document.getElementById('filterBar').style.display=proj.length?'block':'none';
+  const list=document.getElementById('entriesList');
+  if(!sorted.length){
+    list.innerHTML='<div class="empty-state"><div class="emoji">📝</div>'+
+      '<p>'+(proj.length===0?'Henüz gider kaydı yok':'Bu kategoride kayıt yok')+'</p>'+
+      '<small>'+(proj.length===0?'"Gider Ekle" butonu ile başlayın':'Filtreyi değiştirmeyi deneyin')+'</small></div>';
     return;
   }
-  list.innerHTML = sorted.map(e => {
-    const cat = getCat(e.category);
-    return '<div class="entry-card">' +
-      '<div class="entry-accent" style="background:' + cat.color + '"></div>' +
-      '<div class="entry-body">' +
-        '<div class="entry-info">' +
-          '<span class="entry-emoji">' + cat.icon + '</span>' +
-          '<div>' +
-            '<div class="entry-desc">' + esc(e.desc) + '</div>' +
-            '<div class="entry-meta">' + esc(cat.label) + ' · ' + fmtDate(e.date) + '</div>' +
-            (e.note ? '<div class="entry-note">💬 ' + esc(e.note) + '</div>' : '') +
-          '</div>' +
-        '</div>' +
-        '<div class="entry-right">' +
-          '<div class="entry-amount">' + fmt(e.amount) + '</div>' +
-          '<div class="entry-actions">' +
-            '<button class="action-btn" onclick="editEntry(\'' + e.id + '\')" title="Düzenle">✏️</button>' +
-            '<button class="action-btn" onclick="deleteEntry(\'' + e.id + '\')" title="Sil">🗑️</button>' +
-          '</div>' +
-        '</div>' +
+  list.innerHTML=sorted.map(e=>{
+    const cat=getCat(e.category);
+    return '<div class="entry-card">'+
+      '<div class="entry-accent" style="background:'+cat.color+'"></div>'+
+      '<div class="entry-body">'+
+        '<div class="entry-info">'+
+          '<span class="entry-emoji">'+cat.icon+'</span>'+
+          '<div><div class="entry-desc">'+esc(e.desc)+'</div>'+
+          '<div class="entry-meta">'+esc(cat.label)+' · '+fmtDate(e.date)+'</div>'+
+          (e.note?'<div class="entry-note">💬 '+esc(e.note)+'</div>':'')+
+          '</div></div>'+
+        '<div class="entry-right">'+
+          '<div class="entry-amount">'+fmt(e.amount)+'</div>'+
+          '<div class="entry-actions">'+
+            '<button class="action-btn" onclick="editEntry(\''+e.id+'\')" title="Düzenle">✏️</button>'+
+            '<button class="action-btn" onclick="deleteEntry(\''+e.id+'\')" title="Sil">🗑️</button>'+
+          '</div></div>'+
       '</div></div>';
   }).join('');
 }
 
-// ── Entry Modal ────────────────────────────────────────────────────
-let selCat = 'malzeme';
-
-function buildCatPicker() {
-  document.getElementById('catPicker').innerHTML = CATS.map(c =>
-    '<button class="cat-opt' + (c.id===selCat?' selected':'') + '" ' +
-    'style="' + (c.id===selCat?'border-color:'+c.color+';background:'+c.color+'22':'') + '" ' +
-    'onclick="selCat=\'' + c.id + '\';buildCatPicker()">' +
-    '<span class="ico">' + c.icon + '</span>' + esc(c.label) + '</button>'
+// ══════════════════════════════════════════════════════
+// ENTRY MODAL
+// ══════════════════════════════════════════════════════
+let selCat='malzeme';
+function buildCatPicker(){
+  document.getElementById('catPicker').innerHTML=CATS.map(c=>
+    '<button class="cat-opt'+(c.id===selCat?' selected':'')+'" '+
+    'style="'+(c.id===selCat?'border-color:'+c.color+';background:'+c.color+'22':'')+'" '+
+    'onclick="selCat=\''+c.id+'\';buildCatPicker()">'+
+    '<span class="ico">'+c.icon+'</span>'+esc(c.label)+'</button>'
   ).join('');
 }
-
-function openEntryModal(reset) {
-  if (reset !== false) {
-    document.getElementById('editId').value   = '';
-    document.getElementById('fDesc').value    = '';
-    document.getElementById('fAmount').value  = '';
-    document.getElementById('fNote').value    = '';
-    document.getElementById('fDate').value    = todayStr();
-    document.getElementById('entryModalTitle').textContent = 'Yeni Gider Ekle';
-    document.getElementById('entrySubmitBtn').textContent  = 'Kaydet';
-    selCat = CATS[0]?.id || 'diger';
+function openEntryModal(reset){
+  if(reset!==false){
+    document.getElementById('editId').value='';
+    document.getElementById('fDesc').value='';
+    document.getElementById('fAmount').value='';
+    document.getElementById('fNote').value='';
+    document.getElementById('fDate').value=todayStr();
+    document.getElementById('entryModalTitle').textContent='Yeni Gider Ekle';
+    document.getElementById('entrySubmitBtn').textContent='Kaydet';
+    selCat=CATS[0]?.id||'diger';
   }
   buildCatPicker();
   document.getElementById('entryOverlay').classList.add('open');
-  setTimeout(() => document.getElementById('fDesc').focus(), 100);
+  setTimeout(()=>document.getElementById('fDesc').focus(),100);
 }
-
-function closeEntryModal() { document.getElementById('entryOverlay').classList.remove('open'); }
-
-function submitEntry() {
-  const desc   = document.getElementById('fDesc').value.trim();
-  const amount = parseFloat(document.getElementById('fAmount').value);
-  const date   = document.getElementById('fDate').value;
-  const note   = document.getElementById('fNote').value.trim();
-  const editId = document.getElementById('editId').value;
-  if (!desc)              { toast('Açıklama giriniz'); document.getElementById('fDesc').focus(); return; }
-  if (!amount || amount<=0){ toast('Geçerli bir tutar giriniz'); document.getElementById('fAmount').focus(); return; }
-  if (editId) {
-    S.entries = S.entries.map(e => e.id===editId ? {...e, desc, amount, category:selCat, date, note} : e);
+function closeEntryModal(){document.getElementById('entryOverlay').classList.remove('open');}
+function submitEntry(){
+  const desc=document.getElementById('fDesc').value.trim();
+  const amount=parseFloat(document.getElementById('fAmount').value);
+  const date=document.getElementById('fDate').value;
+  const note=document.getElementById('fNote').value.trim();
+  const editId=document.getElementById('editId').value;
+  if(!desc){toast('Açıklama giriniz');document.getElementById('fDesc').focus();return;}
+  if(!amount||amount<=0){toast('Geçerli bir tutar giriniz');document.getElementById('fAmount').focus();return;}
+  if(editId){
+    S.entries=S.entries.map(e=>e.id===editId?{...e,desc,amount,category:selCat,date,note}:e);
     toast('Güncellendi ✓');
-  } else {
-    S.entries.push({id:uid(), desc, amount, category:selCat, date, note, project:S.activeProject, createdAt:new Date().toISOString()});
+  }else{
+    S.entries.push({id:uid(),desc,amount,category:selCat,date,note,project:S.activeProject,createdAt:new Date().toISOString()});
     toast('Kaydedildi ✓');
   }
   saveState(); closeEntryModal(); render();
 }
-
-function editEntry(id) {
-  const e = S.entries.find(x => x.id===id);
-  if (!e) return;
-  selCat = e.category;
-  document.getElementById('editId').value   = e.id;
-  document.getElementById('fDesc').value    = e.desc;
-  document.getElementById('fAmount').value  = e.amount;
-  document.getElementById('fDate').value    = e.date;
-  document.getElementById('fNote').value    = e.note || '';
-  document.getElementById('entryModalTitle').textContent = 'Gideri Düzenle';
-  document.getElementById('entrySubmitBtn').textContent  = 'Güncelle';
+function editEntry(id){
+  const e=S.entries.find(x=>x.id===id); if(!e)return;
+  selCat=e.category;
+  document.getElementById('editId').value=e.id;
+  document.getElementById('fDesc').value=e.desc;
+  document.getElementById('fAmount').value=e.amount;
+  document.getElementById('fDate').value=e.date;
+  document.getElementById('fNote').value=e.note||'';
+  document.getElementById('entryModalTitle').textContent='Gideri Düzenle';
+  document.getElementById('entrySubmitBtn').textContent='Güncelle';
   openEntryModal(false);
 }
-
-function deleteEntry(id) {
-  if (!confirm('Bu gider kaydı silinecek. Emin misiniz?')) return;
-  S.entries = S.entries.filter(e => e.id !== id);
+function deleteEntry(id){
+  if(!confirm('Bu gider kaydı silinecek. Emin misiniz?'))return;
+  S.entries=S.entries.filter(e=>e.id!==id);
   saveState(); render(); toast('Silindi');
 }
 
-// ── Category Management ────────────────────────────────────────────
-function openCatModal() {
-  renderCatMgmtList();
-  document.getElementById('catOverlay').classList.add('open');
-}
-
-function closeCatModal() {
-  document.getElementById('catOverlay').classList.remove('open');
-}
-
-function renderCatMgmtList() {
-  const usedIds = new Set(S.entries.map(e => e.category));
-  const isDefaultId = id => DEFAULT_CATS.some(d => d.id === id);
-  let html = '';
-  CATS.forEach(c => {
-    const count  = S.entries.filter(e => e.category === c.id).length;
-    const canDel = !isDefaultId(c.id) && !usedIds.has(c.id);
-    const tip    = isDefaultId(c.id) ? 'Varsayılan silinemez' : !canDel ? 'Kayıt içeren kategori silinemez' : 'Sil';
-    html += '<div class="cat-mgmt-item">' +
-      '<div class="cat-mgmt-dot" style="background:' + c.color + '"></div>' +
-      '<span class="cat-mgmt-icon">' + c.icon + '</span>' +
-      '<span class="cat-mgmt-name">' + esc(c.label) + '</span>' +
-      '<span class="cat-mgmt-badge">' + (count>0 ? count+' kayıt' : '') + '</span>' +
-      '<button class="btn-del-cat" onclick="deleteCategory(\'' + c.id + '\')" ' +
-        (!canDel ? 'disabled ' : '') + 'title="' + tip + '">Sil</button>' +
+// ══════════════════════════════════════════════════════
+// CATEGORY MANAGEMENT
+// ══════════════════════════════════════════════════════
+function openCatModal(){renderCatMgmtList();document.getElementById('catOverlay').classList.add('open');}
+function closeCatModal(){document.getElementById('catOverlay').classList.remove('open');}
+function renderCatMgmtList(){
+  const usedIds=new Set(S.entries.map(e=>e.category));
+  const isDefId=id=>DEFAULT_CATS.some(d=>d.id===id);
+  let html='';
+  CATS.forEach(c=>{
+    const count=S.entries.filter(e=>e.category===c.id).length;
+    const canDel=!isDefId(c.id)&&!usedIds.has(c.id);
+    const tip=isDefId(c.id)?'Varsayılan silinemez':!canDel?'Kayıt içeren silinemez':'Sil';
+    html+='<div class="cat-mgmt-item">'+
+      '<div class="cat-mgmt-dot" style="background:'+c.color+'"></div>'+
+      '<span class="cat-mgmt-icon">'+c.icon+'</span>'+
+      '<span class="cat-mgmt-name">'+esc(c.label)+'</span>'+
+      '<span class="cat-mgmt-badge">'+(count>0?count+' kayıt':'')+'</span>'+
+      '<button class="btn-del-cat" onclick="deleteCategory(\''+c.id+'\')" '+(!canDel?'disabled ':'')+' title="'+tip+'">Sil</button>'+
       '</div>';
   });
-  document.getElementById('catMgmtList').innerHTML = html || '<p style="color:var(--text3);font-size:13px;margin-bottom:12px">Kategori yok.</p>';
+  document.getElementById('catMgmtList').innerHTML=html||'<p style="color:var(--text3);font-size:13px;margin-bottom:12px">Kategori yok.</p>';
 }
-
-function addCategory() {
-  const icon  = document.getElementById('newCatIcon').value.trim()  || '📌';
-  const label = document.getElementById('newCatLabel').value.trim();
-  const color = document.getElementById('newCatColor').value;
-  if (!label) { toast('Kategori adı giriniz'); return; }
-  if (CATS.find(c => c.label.toLowerCase() === label.toLowerCase())) { toast('Bu isimde kategori zaten var'); return; }
-  const id = 'cat_' + Date.now().toString(36);
-  CATS.push({id, label, icon, color});
+function addCategory(){
+  const icon=document.getElementById('newCatIcon').value.trim()||'📌';
+  const label=document.getElementById('newCatLabel').value.trim();
+  const color=document.getElementById('newCatColor').value;
+  if(!label){toast('Kategori adı giriniz');return;}
+  if(CATS.find(c=>c.label.toLowerCase()===label.toLowerCase())){toast('Bu isimde kategori zaten var');return;}
+  CATS.push({id:'cat_'+Date.now().toString(36),label,icon,color});
   saveState(); render();
-  document.getElementById('newCatIcon').value  = '';
-  document.getElementById('newCatLabel').value = '';
-  document.getElementById('newCatColor').value = '#6366F1';
+  document.getElementById('newCatIcon').value='';
+  document.getElementById('newCatLabel').value='';
+  document.getElementById('newCatColor').value='#6366F1';
   renderCatMgmtList();
-  toast('"' + label + '" eklendi ✓');
+  toast('"'+label+'" eklendi ✓');
+}
+function deleteCategory(id){
+  const cat=CATS.find(c=>c.id===id); if(!cat)return;
+  if(!confirm('"'+cat.label+'" silinecek. Emin misiniz?'))return;
+  CATS=CATS.filter(c=>c.id!==id);
+  saveState(); render(); renderCatMgmtList(); toast('Kategori silindi');
 }
 
-function deleteCategory(id) {
-  const cat = CATS.find(c => c.id === id);
-  if (!cat) return;
-  if (!confirm('"' + cat.label + '" kategorisi silinecek. Emin misiniz?')) return;
-  CATS = CATS.filter(c => c.id !== id);
-  saveState(); render(); renderCatMgmtList();
-  toast('Kategori silindi');
+// ══════════════════════════════════════════════════════
+// EXPORT
+// ══════════════════════════════════════════════════════
+function exportCSV(){
+  const proj=S.entries.filter(e=>e.project===S.activeProject);
+  if(!proj.length){toast('Dışa aktarılacak kayıt yok');return;}
+  const hdr=['Tarih','Açıklama','Kategori','Tutar (TL)','Not','Proje'];
+  const rows=proj.map(e=>[e.date,'"'+e.desc.replace(/"/g,'""')+'"',getCat(e.category).label,e.amount,'"'+(e.note||'').replace(/"/g,'""')+'"',e.project]);
+  const csv='\uFEFF'+[hdr,...rows].map(r=>r.join(';')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+  a.download=S.activeProject+'-maliyetler.csv'; a.click(); toast('CSV indirildi ✓');
 }
-
-// ── Export ─────────────────────────────────────────────────────────
-function exportCSV() {
-  const proj = S.entries.filter(e => e.project === S.activeProject);
-  if (!proj.length) { toast('Dışa aktarılacak kayıt yok'); return; }
-  const hdr  = ['Tarih','Açıklama','Kategori','Tutar (TL)','Not','Proje'];
-  const rows = proj.map(e => [e.date, '"'+e.desc.replace(/"/g,'""')+'"', getCat(e.category).label, e.amount, '"'+(e.note||'').replace(/"/g,'""')+'"', e.project]);
-  const csv  = '\uFEFF' + [hdr,...rows].map(r=>r.join(';')).join('\n');
-  const a    = document.createElement('a');
-  a.href     = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
-  a.download = S.activeProject + '-maliyetler.csv';
-  a.click(); toast('CSV indirildi ✓');
-}
-
-function exportPrint() {
-  const proj = S.entries.filter(e => e.project===S.activeProject).sort((a,b)=>new Date(b.date)-new Date(a.date));
-  if (!proj.length) { toast('Yazdırılacak kayıt yok'); return; }
-  const total = proj.reduce((s,e)=>s+e.amount,0);
-  const rows  = proj.map(e => '<tr><td>'+fmtDate(e.date)+'</td><td>'+getCat(e.category).icon+' '+esc(e.desc)+'</td><td>'+esc(getCat(e.category).label)+'</td><td style="text-align:right;font-weight:700">'+fmt(e.amount)+'</td><td>'+esc(e.note||'')+'</td></tr>').join('');
-  const w = window.open('','_blank','width=850,height=650');
-  w.document.write('<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>'+S.activeProject+' - Maliyet Raporu</title><style>body{font-family:Segoe UI,sans-serif;padding:32px;color:#111}h1{font-size:22px;margin-bottom:4px}p{color:#666;font-size:13px;margin-bottom:20px}table{width:100%;border-collapse:collapse;font-size:13px}th{background:#1a1d2b;color:#fff;padding:9px 12px;text-align:left}td{padding:8px 12px;border-bottom:1px solid #e5e7eb}.total{font-size:17px;font-weight:700;margin-top:18px;text-align:right}@media print{body{padding:12px}}</style></head><body><h1>🏗️ '+esc(S.activeProject)+' — Maliyet Raporu</h1><p>Oluşturulma: '+new Date().toLocaleString('tr-TR')+' · Toplam '+proj.length+' kayıt</p><table><thead><tr><th>Tarih</th><th>Açıklama</th><th>Kategori</th><th style="text-align:right">Tutar</th><th>Not</th></tr></thead><tbody>'+rows+'</tbody></table><div class="total">Toplam: '+fmt(total)+'</div><scr'+'ipt>window.onload=()=>window.print()<\/scr'+'ipt></body></html>');
+function exportPrint(){
+  const proj=S.entries.filter(e=>e.project===S.activeProject).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  if(!proj.length){toast('Yazdırılacak kayıt yok');return;}
+  const total=proj.reduce((s,e)=>s+e.amount,0);
+  const rows=proj.map(e=>'<tr><td>'+fmtDate(e.date)+'</td><td>'+getCat(e.category).icon+' '+esc(e.desc)+'</td><td>'+esc(getCat(e.category).label)+'</td><td style="text-align:right;font-weight:700">'+fmt(e.amount)+'</td><td>'+esc(e.note||'')+'</td></tr>').join('');
+  const w=window.open('','_blank','width=850,height=650');
+  w.document.write('<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>'+S.activeProject+' - Maliyet Raporu</title><style>body{font-family:Segoe UI,sans-serif;padding:32px;color:#111}h1{font-size:22px;margin-bottom:4px}p{color:#666;font-size:13px;margin-bottom:20px}table{width:100%;border-collapse:collapse;font-size:13px}th{background:#1a1d2b;color:#fff;padding:9px 12px;text-align:left}td{padding:8px 12px;border-bottom:1px solid #e5e7eb}.total{font-size:17px;font-weight:700;margin-top:18px;text-align:right}@media print{body{padding:12px}}</style></head><body><h1>🏗️ '+esc(S.activeProject)+' — Maliyet Raporu</h1><p>'+new Date().toLocaleString('tr-TR')+' · '+proj.length+' kayıt</p><table><thead><tr><th>Tarih</th><th>Açıklama</th><th>Kategori</th><th style="text-align:right">Tutar</th><th>Not</th></tr></thead><tbody>'+rows+'</tbody></table><div class="total">Toplam: '+fmt(total)+'</div><scr'+'ipt>window.onload=()=>window.print()<\/scr'+'ipt></body></html>');
   w.document.close();
 }
 
-// ── Import (Excel/CSV) ─────────────────────────────────────────────
-let impState = {step:0, rows:[], headers:[], mapping:{}, mode:'append'};
-const FIELD_OPTS = [
-  {value:'',        label:'— Atla —'},
-  {value:'date',    label:'Tarih'},
-  {value:'desc',    label:'Açıklama'},
-  {value:'category',label:'Kategori'},
-  {value:'amount',  label:'Tutar'},
-  {value:'note',    label:'Not'},
-  {value:'project', label:'Proje'},
+// ══════════════════════════════════════════════════════
+// IMPORT (Excel/CSV)
+// ══════════════════════════════════════════════════════
+let impState={step:0,rows:[],headers:[],mapping:{},mode:'append'};
+const FIELD_OPTS=[
+  {value:'',label:'— Atla —'},{value:'date',label:'Tarih'},{value:'desc',label:'Açıklama'},
+  {value:'category',label:'Kategori'},{value:'amount',label:'Tutar'},{value:'note',label:'Not'},{value:'project',label:'Proje'},
 ];
-
-function autoMap(headers) {
-  const map = {};
-  const pat = {
-    date:/tarih|date/i, desc:/açıklama|aciklama|desc/i,
-    category:/kategori|category/i, amount:/tutar|amount|fiyat|tl/i,
-    note:/not|note|yorum/i, project:/proje|project/i,
-  };
-  headers.forEach((h,i) => {
-    for (const [field,rx] of Object.entries(pat)) {
-      if (rx.test(h) && !Object.values(map).includes(field)) { map[i]=field; break; }
-    }
-  });
+function autoMap(headers){
+  const map={};
+  const pat={date:/tarih|date/i,desc:/açıklama|aciklama|desc/i,category:/kategori|category/i,amount:/tutar|amount|fiyat|tl/i,note:/not|note/i,project:/proje|project/i};
+  headers.forEach((h,i)=>{for(const[field,rx]of Object.entries(pat)){if(rx.test(h)&&!Object.values(map).includes(field)){map[i]=field;break;}}});
   return map;
 }
-
-function parseCSV(text) {
-  const first = text.split(/\r?\n/)[0];
-  const sep   = first.split(';').length > first.split(',').length ? ';' : ',';
-  return text.trim().split(/\r?\n/).filter(l=>l.trim()).map(line => {
-    const row=[]; let cur='', inQ=false;
-    for (let i=0; i<line.length; i++) {
-      const ch=line[i];
-      if (ch==='"') { if (inQ && line[i+1]==='"') { cur+='"'; i++; } else inQ=!inQ; }
-      else if (ch===sep && !inQ) { row.push(cur.trim()); cur=''; }
-      else cur+=ch;
-    }
-    row.push(cur.trim()); return row;
+function parseCSV(text){
+  const first=text.split(/\r?\n/)[0];
+  const sep=first.split(';').length>first.split(',').length?';':',';
+  return text.trim().split(/\r?\n/).filter(l=>l.trim()).map(line=>{
+    const row=[];let cur='',inQ=false;
+    for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"'){if(inQ&&line[i+1]==='"'){cur+='"';i++;}else inQ=!inQ;}else if(ch===sep&&!inQ){row.push(cur.trim());cur='';}else cur+=ch;}
+    row.push(cur.trim());return row;
   });
 }
-
-function normDate(v) {
-  if (!v) return todayStr();
-  const s = String(v).trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  const m = s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})$/);
-  if (m) { const y=m[3].length===2?'20'+m[3]:m[3]; return y+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0'); }
+function normDate(v){
+  if(!v)return todayStr();const s=String(v).trim();
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;
+  const m=s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})$/);
+  if(m){const y=m[3].length===2?'20'+m[3]:m[3];return y+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');}
   return todayStr();
 }
-
-function normCat(v) {
-  if (!v) return CATS[0]?.id || 'diger';
-  const val = String(v).toLowerCase().trim();
-  const found = CATS.find(c => c.label.toLowerCase() === val || c.id === val);
-  if (found) return found.id;
-  if (/malzeme|material/i.test(val)) return 'malzeme';
-  if (/işçi|isci|labor/i.test(val))  return 'iscilik';
-  if (/taşı|tasi|nakliy/i.test(val)) return 'tasima';
-  if (/ekipman|equip/i.test(val))    return 'ekipman';
-  if (/taşer|taser|müteahhit/i.test(val)) return 'taseron';
-  return CATS[CATS.length-1]?.id || 'diger';
+function normCat(v){
+  if(!v)return CATS[0]?.id||'diger';const val=String(v).toLowerCase().trim();
+  const found=CATS.find(c=>c.label.toLowerCase()===val||c.id===val);if(found)return found.id;
+  if(/malzeme/i.test(val))return 'malzeme';if(/işçi|isci/i.test(val))return 'iscilik';
+  if(/taşı|tasi/i.test(val))return 'tasima';if(/ekipman/i.test(val))return 'ekipman';
+  if(/taşer|taser/i.test(val))return 'taseron';return CATS[CATS.length-1]?.id||'diger';
 }
-
-function openImportModal() {
-  impState = {step:0, rows:[], headers:[], mapping:{}, mode:'append'};
-  document.getElementById('importOverlay').classList.add('open');
-  renderImportStep();
-}
-
-function closeImportModal() { document.getElementById('importOverlay').classList.remove('open'); }
-
-function renderImportStep() {
-  const titles = ['Dosya Seç','Sütun Eşle','Önizleme & Aktar'];
-  document.getElementById('importModalTitle').textContent = '📂 Excel / CSV Yükle — ' + titles[impState.step];
-  const stepHtml = '<div class="step-indicator">' +
-    titles.map((t,i) => '<div class="step'+(i<impState.step?' done':i===impState.step?' active':'')+'">'+
-      (i<impState.step?'✓ ':'')+t+'</div>').join('') + '</div>';
-  const body = document.getElementById('importBody');
-
-  if (impState.step === 0) {
-    body.innerHTML = stepHtml +
-      '<div class="csv-drop-zone" id="dropZone" onclick="document.getElementById(\'fileInput\').click()" ' +
-        'ondragover="event.preventDefault();this.classList.add(\'drag-over\')" ' +
-        'ondragleave="this.classList.remove(\'drag-over\')" ondrop="handleDrop(event)">' +
-        '<div class="dz-icon">📂</div>' +
-        '<p><b>Tıkla</b> veya dosyayı buraya sürükle</p>' +
-        '<small>Excel (.xlsx) veya CSV (.csv) desteklenir</small>' +
-      '</div>' +
-      '<div style="margin-top:14px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;padding:14px">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">' +
-          '<p style="font-size:12px;font-weight:700;color:var(--text2)">📋 Beklenen Format:</p>' +
-          '<button onclick="downloadTemplate()" style="background:linear-gradient(135deg,var(--gold),var(--gold2));color:#0f1117;border:none;border-radius:7px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">⬇️ Şablonu İndir</button>' +
-        '</div>' +
-        '<code style="font-size:11px;color:var(--text3);line-height:1.7;display:block">Tarih;Açıklama;Kategori;Tutar;Not;Proje<br>15.03.2024;Çimento;Malzeme;12500;;Genel</code>' +
-        '<p style="font-size:11px;color:var(--text3);margin-top:8px">Kategoriler: <b style="color:var(--text2)">' + CATS.map(c=>esc(c.label)).join(', ') + '</b></p>' +
+function openImportModal(){impState={step:0,rows:[],headers:[],mapping:{},mode:'append'};document.getElementById('importOverlay').classList.add('open');renderImportStep();}
+function closeImportModal(){document.getElementById('importOverlay').classList.remove('open');}
+function renderImportStep(){
+  const titles=['Dosya Seç','Sütun Eşle','Önizleme & Aktar'];
+  document.getElementById('importModalTitle').textContent='📂 Excel / CSV Yükle — '+titles[impState.step];
+  const stepHtml='<div class="step-indicator">'+titles.map((t,i)=>'<div class="step'+(i<impState.step?' done':i===impState.step?' active':'')+'">'+( i<impState.step?'✓ ':'')+t+'</div>').join('')+'</div>';
+  const body=document.getElementById('importBody');
+  if(impState.step===0){
+    body.innerHTML=stepHtml+
+      '<div class="csv-drop-zone" id="dropZone" onclick="document.getElementById(\'fileInput\').click()" ondragover="event.preventDefault();this.classList.add(\'drag-over\')" ondragleave="this.classList.remove(\'drag-over\')" ondrop="handleDrop(event)">'+
+        '<div class="dz-icon">📂</div><p><b>Tıkla</b> veya dosyayı buraya sürükle</p><small>Excel (.xlsx) veya CSV (.csv)</small></div>'+
+      '<div style="margin-top:14px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;padding:14px">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">'+
+          '<p style="font-size:12px;font-weight:700;color:var(--text2)">📋 Beklenen Format:</p>'+
+          '<button onclick="downloadTemplate()" style="background:linear-gradient(135deg,var(--gold),var(--gold2));color:#0f1117;border:none;border-radius:7px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">⬇️ Şablonu İndir</button>'+
+        '</div>'+
+        '<code style="font-size:11px;color:var(--text3);line-height:1.7;display:block">Tarih;Açıklama;Kategori;Tutar;Not;Proje<br>15.03.2024;Çimento;Malzeme;12500;;Genel</code>'+
       '</div>';
-
-  } else if (impState.step === 1) {
-    const prev = impState.rows.slice(0,3);
-    const mapRows = impState.headers.map((h,i) => {
-      const opts = FIELD_OPTS.map(f => '<option value="'+f.value+'"'+(impState.mapping[i]===f.value?' selected':'')+'>'+f.label+'</option>').join('');
-      const ex   = prev.map(r => esc(String(r[i]||'').slice(0,20))).join(' / ');
-      return '<tr><td style="color:var(--gold);font-weight:600">'+esc(h)+'</td><td style="color:var(--text3);font-size:11px">'+ex+'</td>' +
-        '<td><select onchange="impState.mapping['+i+']=this.value">'+opts+'</select></td></tr>';
+  }else if(impState.step===1){
+    const prev=impState.rows.slice(0,3);
+    const mapRows=impState.headers.map((h,i)=>{
+      const opts=FIELD_OPTS.map(f=>'<option value="'+f.value+'"'+(impState.mapping[i]===f.value?' selected':'')+'>'+f.label+'</option>').join('');
+      const ex=prev.map(r=>esc(String(r[i]||'').slice(0,20))).join(' / ');
+      return '<tr><td style="color:var(--gold);font-weight:600">'+esc(h)+'</td><td style="color:var(--text3);font-size:11px">'+ex+'</td><td><select onchange="impState.mapping['+i+']=this.value">'+opts+'</select></td></tr>';
     }).join('');
-    body.innerHTML = stepHtml +
-      '<p style="font-size:12px;color:var(--text3);margin-bottom:10px">' + impState.rows.length + ' satır okundu. Sütunları eşleyin:</p>' +
-      '<div style="overflow:auto;border-radius:8px;border:1px solid var(--border)">' +
-        '<table class="map-table"><thead><tr><th>CSV Sütunu</th><th>Örnek</th><th>Alan</th></tr></thead><tbody>' + mapRows + '</tbody></table>' +
-      '</div>' +
-      '<div style="margin-top:14px"><p style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px">İçe Aktarma Modu:</p>' +
-        '<div class="import-opts">' +
-          '<button class="import-opt'+(impState.mode==='append'?' sel':'')+'" onclick="impState.mode=\'append\';this.parentNode.querySelectorAll(\'.import-opt\').forEach(b=>b.classList.remove(\'sel\'));this.classList.add(\'sel\')">' +
-            '<span class="opt-icon">➕</span><span class="opt-label">Ekle</span><span class="opt-sub">Mevcut kayıtları koru</span></button>' +
-          '<button class="import-opt'+(impState.mode==='replace'?' sel':'')+'" onclick="impState.mode=\'replace\';this.parentNode.querySelectorAll(\'.import-opt\').forEach(b=>b.classList.remove(\'sel\'));this.classList.add(\'sel\')">' +
-            '<span class="opt-icon">🔄</span><span class="opt-label">Üzerine Yaz</span><span class="opt-sub">Bu projeyi temizle</span></button>' +
-        '</div>' +
-      '</div>' +
-      '<div style="display:flex;gap:8px;margin-top:8px">' +
-        '<button class="btn-outline" onclick="impState.step=0;renderImportStep()" style="flex:1">← Geri</button>' +
-        '<button class="btn-submit" onclick="goToPreview()" style="flex:2">Önizlemeye Geç →</button>' +
-      '</div>';
-
-  } else if (impState.step === 2) {
-    const parsed   = buildParsedEntries();
-    const skipped  = impState.rows.length - parsed.length;
-    const prevRows = parsed.slice(0,8).map(e => {
-      const cat = getCat(e.category);
-      return '<tr><td>'+e.date+'</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">'+esc(e.desc)+'</td>' +
-        '<td>'+cat.icon+' '+esc(cat.label)+'</td><td style="text-align:right;color:var(--gold)">'+fmt(e.amount)+'</td><td>'+esc(e.project)+'</td></tr>';
-    }).join('');
-    body.innerHTML = stepHtml +
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">' +
-        '<p style="font-size:13px;color:var(--text2)"><b style="color:var(--green)">'+parsed.length+'</b> kayıt aktarılacak' +
-          (skipped>0 ? ' · <b style="color:var(--red)">'+skipped+'</b> satır atlandı' : '') + '</p>' +
-        '<span style="font-size:11px;color:var(--text3)">'+(impState.mode==='append'?'➕ Eklenecek':'🔄 Üzerine yazılacak')+'</span>' +
-      '</div>' +
-      '<div class="preview-table-wrap"><table class="preview-table">' +
-        '<thead><tr><th>Tarih</th><th>Açıklama</th><th>Kategori</th><th>Tutar</th><th>Proje</th></tr></thead>' +
-        '<tbody>' + prevRows + '</tbody></table></div>' +
-      (parsed.length>8 ? '<p style="font-size:11px;color:var(--text3);margin-top:6px;text-align:center">+ '+(parsed.length-8)+' kayıt daha…</p>' : '') +
-      '<div style="display:flex;gap:8px;margin-top:8px">' +
-        '<button class="btn-outline" onclick="impState.step=1;renderImportStep()" style="flex:1">← Geri</button>' +
-        '<button class="btn-submit" onclick="doImport()" style="flex:2"'+(parsed.length===0?' disabled':'')+'>'+parsed.length+' Kaydı İçe Aktar ✓</button>' +
-      '</div>';
+    body.innerHTML=stepHtml+'<p style="font-size:12px;color:var(--text3);margin-bottom:10px">'+impState.rows.length+' satır okundu.</p>'+
+      '<div style="overflow:auto;border-radius:8px;border:1px solid var(--border)"><table class="map-table"><thead><tr><th>Sütun</th><th>Örnek</th><th>Alan</th></tr></thead><tbody>'+mapRows+'</tbody></table></div>'+
+      '<div style="margin-top:14px"><p style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px">Mod:</p>'+
+        '<div class="import-opts">'+
+          '<button class="import-opt'+(impState.mode==='append'?' sel':'')+'" onclick="impState.mode=\'append\';this.parentNode.querySelectorAll(\'.import-opt\').forEach(b=>b.classList.remove(\'sel\'));this.classList.add(\'sel\')"><span class="opt-icon">➕</span><span class="opt-label">Ekle</span><span class="opt-sub">Mevcut kayıtları koru</span></button>'+
+          '<button class="import-opt'+(impState.mode==='replace'?' sel':'')+'" onclick="impState.mode=\'replace\';this.parentNode.querySelectorAll(\'.import-opt\').forEach(b=>b.classList.remove(\'sel\'));this.classList.add(\'sel\')"><span class="opt-icon">🔄</span><span class="opt-label">Üzerine Yaz</span><span class="opt-sub">Bu projeyi temizle</span></button>'+
+        '</div></div>'+
+      '<div style="display:flex;gap:8px;margin-top:8px"><button class="btn-outline" onclick="impState.step=0;renderImportStep()" style="flex:1">← Geri</button><button class="btn-submit" onclick="goToPreview()" style="flex:2">Önizlemeye Geç →</button></div>';
+  }else if(impState.step===2){
+    const parsed=buildParsedEntries(),skipped=impState.rows.length-parsed.length;
+    const prevRows=parsed.slice(0,8).map(e=>{const cat=getCat(e.category);return'<tr><td>'+e.date+'</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">'+esc(e.desc)+'</td><td>'+cat.icon+' '+esc(cat.label)+'</td><td style="text-align:right;color:var(--gold)">'+fmt(e.amount)+'</td><td>'+esc(e.project)+'</td></tr>';}).join('');
+    body.innerHTML=stepHtml+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">'+
+        '<p style="font-size:13px;color:var(--text2)"><b style="color:var(--green)">'+parsed.length+'</b> kayıt aktarılacak'+(skipped>0?' · <b style="color:var(--red)">'+skipped+'</b> satır atlandı':'')+' </p>'+
+        '<span style="font-size:11px;color:var(--text3)">'+(impState.mode==='append'?'➕ Eklenecek':'🔄 Üzerine yazılacak')+'</span></div>'+
+      '<div class="preview-table-wrap"><table class="preview-table"><thead><tr><th>Tarih</th><th>Açıklama</th><th>Kategori</th><th>Tutar</th><th>Proje</th></tr></thead><tbody>'+prevRows+'</tbody></table></div>'+
+      (parsed.length>8?'<p style="font-size:11px;color:var(--text3);margin-top:6px;text-align:center">+ '+(parsed.length-8)+' kayıt daha…</p>':'')+
+      '<div style="display:flex;gap:8px;margin-top:8px"><button class="btn-outline" onclick="impState.step=1;renderImportStep()" style="flex:1">← Geri</button><button class="btn-submit" onclick="doImport()" style="flex:2"'+(parsed.length===0?' disabled':'')+'>'+parsed.length+' Kaydı İçe Aktar ✓</button></div>';
   }
 }
-
-function goToPreview() {
-  if (!Object.values(impState.mapping).includes('desc') || !Object.values(impState.mapping).includes('amount')) {
-    toast('En az Açıklama ve Tutar sütunu eşlenmeli'); return;
-  }
-  impState.step=2; renderImportStep();
+function goToPreview(){
+  if(!Object.values(impState.mapping).includes('desc')||!Object.values(impState.mapping).includes('amount')){toast('En az Açıklama ve Tutar sütunu eşlenmeli');return;}
+  impState.step=2;renderImportStep();
 }
-
-function buildParsedEntries() {
-  const m   = impState.mapping;
-  const get = (row, field) => { const idx=Object.entries(m).find(([,v])=>v===field)?.[0]; return idx!==undefined?String(row[idx]||'').trim():''; };
-  return impState.rows.map(row => {
-    const desc   = get(row,'desc');
-    const amount = parseFloat(get(row,'amount').replace(/[^\d.,-]/g,'').replace(',','.'));
-    if (!desc || isNaN(amount) || amount<=0) return null;
-    return {id:uid(), desc, amount, date:normDate(get(row,'date')), category:normCat(get(row,'category')),
-      note:get(row,'note'), project:get(row,'project')||S.activeProject, createdAt:new Date().toISOString()};
+function buildParsedEntries(){
+  const m=impState.mapping;
+  const get=(row,field)=>{const idx=Object.entries(m).find(([,v])=>v===field)?.[0];return idx!==undefined?String(row[idx]||'').trim():'';};
+  return impState.rows.map(row=>{
+    const desc=get(row,'desc'),amount=parseFloat(get(row,'amount').replace(/[^\d.,-]/g,'').replace(',','.'));
+    if(!desc||isNaN(amount)||amount<=0)return null;
+    return{id:uid(),desc,amount,date:normDate(get(row,'date')),category:normCat(get(row,'category')),note:get(row,'note'),project:get(row,'project')||S.activeProject,createdAt:new Date().toISOString()};
   }).filter(Boolean);
 }
-
-function doImport() {
-  const parsed = buildParsedEntries();
-  if (!parsed.length) { toast('Aktarılacak geçerli kayıt yok'); return; }
-  [...new Set(parsed.map(e=>e.project))].forEach(p => { if (!S.projects.includes(p)) S.projects.push(p); });
-  if (impState.mode==='replace') {
-    const affected = new Set(parsed.map(e=>e.project));
-    S.entries = S.entries.filter(e => !affected.has(e.project));
-  }
-  S.entries.push(...parsed);
-  S.activeProject = parsed[0].project;
+function doImport(){
+  const parsed=buildParsedEntries();
+  if(!parsed.length){toast('Aktarılacak geçerli kayıt yok');return;}
+  [...new Set(parsed.map(e=>e.project))].forEach(p=>{if(!S.projects.includes(p))S.projects.push(p);});
+  if(impState.mode==='replace'){const aff=new Set(parsed.map(e=>e.project));S.entries=S.entries.filter(e=>!aff.has(e.project));}
+  S.entries.push(...parsed);S.activeProject=parsed[0].project;
   saveState();
-  document.getElementById('importBody').innerHTML =
-    '<div class="import-result"><div class="ri-icon">🎉</div>' +
-    '<p>'+parsed.length+' kayıt başarıyla aktarıldı!</p>' +
-    '<small>'+(impState.mode==='replace'?'Eski kayıtlar silindi, yenileri eklendi':'Mevcut kayıtlara eklendi')+'</small></div>' +
-    '<button class="btn-submit" onclick="closeImportModal()" style="margin-top:8px;width:100%">Tamam</button>';
-  document.getElementById('importModalTitle').textContent = '✅ Tamamlandı';
-  render(); toast(parsed.length+' kayıt içe aktarıldı ✓');
+  document.getElementById('importBody').innerHTML='<div class="import-result"><div style="font-size:36px">🎉</div><p>'+parsed.length+' kayıt başarıyla aktarıldı!</p><small>Firebase\'e kaydediliyor...</small></div><button class="btn-submit" onclick="closeImportModal()" style="margin-top:8px;width:100%">Tamam</button>';
+  document.getElementById('importModalTitle').textContent='✅ Tamamlandı';
+  render();toast(parsed.length+' kayıt içe aktarıldı ✓');
 }
-
-function handleDrop(e) {
-  e.preventDefault();
-  document.getElementById('dropZone').classList.remove('drag-over');
-  const file = e.dataTransfer.files[0];
-  if (file) readFile(file);
-}
-
-function handleFileSelect(e) {
-  const file = e.target.files[0];
-  if (file) readFile(file);
-  e.target.value = '';
-}
-
-function readFile(file) {
-  const isXlsx = /\.(xlsx|xls)$/i.test(file.name);
-  const reader  = new FileReader();
-  reader.onload = ev => {
-    try {
+function handleDrop(e){e.preventDefault();document.getElementById('dropZone').classList.remove('drag-over');const file=e.dataTransfer.files[0];if(file)readFile(file);}
+function handleFileSelect(e){const file=e.target.files[0];if(file)readFile(file);e.target.value='';}
+function readFile(file){
+  const isXlsx=/\.(xlsx|xls)$/i.test(file.name);const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
       let rows;
-      if (isXlsx) {
-        const wb   = XLSX.read(ev.target.result, {type:'array', cellDates:true});
-        const ws   = wb.Sheets[wb.SheetNames[0]];
-        const data = XLSX.utils.sheet_to_json(ws, {header:1, raw:false, dateNF:'YYYY-MM-DD'});
-        rows = data.filter(r => Array.isArray(r) && r.some(c => String(c||'').trim()));
-      } else {
-        rows = parseCSV(ev.target.result);
-      }
-      if (rows.length<2) { toast('Dosya okunamadı veya boş'); return; }
-      impState.headers = rows[0].map(h => String(h||'').replace(/^\uFEFF/,'').trim());
-      impState.rows    = rows.slice(1).filter(r => r.some(c => String(c||'').trim()));
-      impState.mapping = autoMap(impState.headers);
-      impState.step    = 1;
-      renderImportStep();
-    } catch(err) { toast('Dosya okunamadı: ' + err.message); }
+      if(isXlsx){const wb=XLSX.read(ev.target.result,{type:'array',cellDates:true});const ws=wb.Sheets[wb.SheetNames[0]];const data=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,dateNF:'YYYY-MM-DD'});rows=data.filter(r=>Array.isArray(r)&&r.some(c=>String(c||'').trim()));}
+      else{rows=parseCSV(ev.target.result);}
+      if(rows.length<2){toast('Dosya okunamadı veya boş');return;}
+      impState.headers=rows[0].map(h=>String(h||'').replace(/^\uFEFF/,'').trim());
+      impState.rows=rows.slice(1).filter(r=>r.some(c=>String(c||'').trim()));
+      impState.mapping=autoMap(impState.headers);impState.step=1;renderImportStep();
+    }catch(err){toast('Dosya okunamadı: '+err.message);}
   };
-  if (isXlsx) reader.readAsArrayBuffer(file);
-  else reader.readAsText(file,'UTF-8');
+  if(isXlsx)reader.readAsArrayBuffer(file);else reader.readAsText(file,'UTF-8');
+}
+function downloadTemplate(){
+  const rows=[['Tarih','Açıklama','Kategori','Tutar','Not','Proje'],['15.03.2024','Çimento - 200 çuval','Malzeme',12500,'Fatura #101','Genel'],['16.03.2024','Usta ücreti - Mart','İşçilik',8000,'','Genel'],['17.03.2024','Demir donatı','Malzeme',45000,'Fatura #102','Genel'],['18.03.2024','Vinç kiralama','Ekipman',3500,'','Genel'],];
+  const wb=XLSX.utils.book_new(),ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[14,36,14,12,24,16].map(w=>({wch:w}));XLSX.utils.book_append_sheet(wb,ws,'Giderler');
+  XLSX.writeFile(wb,'insaat-maliyet-sablon.xlsx');toast('Şablon indirildi ✓');
 }
 
-function downloadTemplate() {
-  const rows = [
-    ['Tarih','Açıklama','Kategori','Tutar','Not','Proje'],
-    ['15.03.2024','Çimento - 200 çuval','Malzeme',12500,'Fatura #101','Genel'],
-    ['16.03.2024','Usta ücreti - Mart','İşçilik',8000,'','Genel'],
-    ['17.03.2024','Demir donatı','Malzeme',45000,'Fatura #102','Genel'],
-    ['18.03.2024','Vinç kiralama','Ekipman',3500,'Günlük kiralama','Genel'],
-    ['19.03.2024','Kum-mıcır nakliyesi','Taşıma',2200,'','Genel'],
-    ['20.03.2024','Elektrik taşeronu','Taşeron',15000,'Sözleşme #5','Genel'],
-  ];
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [14,36,14,12,24,16].map(w=>({wch:w}));
-  XLSX.utils.book_append_sheet(wb, ws, 'Giderler');
-  XLSX.writeFile(wb, 'insaat-maliyet-sablon.xlsx');
-  toast('Şablon indirildi ✓');
+// ══════════════════════════════════════════════════════
+// RENDER & INIT
+// ══════════════════════════════════════════════════════
+function render(){
+  renderProjects();renderSummary();renderCatBreakdown();renderEntries();
 }
 
-// ── GitHub Sync ────────────────────────────────────────────────────
-function openGhModal() {
-  document.getElementById('ghToken').value = GH.token || '';
-  document.getElementById('ghOwner').value = GH.owner || '';
-  document.getElementById('ghRepo').value  = GH.repo  || '';
-  document.getElementById('ghPath').value  = GH.path  || 'data/maliyet.json';
-  renderGhStatus();
-  document.getElementById('ghOverlay').classList.add('open');
-}
-
-function closeGhModal() {
-  document.getElementById('ghOverlay').classList.remove('open');
-}
-
-function renderGhStatus(msg, type) {
-  const box = document.getElementById('ghStatusBox');
-  if (!msg) {
-    if (!ghConfigured()) {
-      box.innerHTML = '<div class="gh-status disconnected">🔌 Bağlı değil — aşağıya bilgileri girin</div>';
-    } else {
-      box.innerHTML = '<div class="gh-status connected">✅ Bağlı: ' + esc(GH.owner) + '/' + esc(GH.repo) + ' → ' + esc(GH.path) + '</div>';
-    }
-  } else {
-    box.innerHTML = '<div class="gh-status ' + type + '">' + msg + '</div>';
-  }
-}
-
-function saveGhSettings() {
-  GH.token = document.getElementById('ghToken').value.trim();
-  GH.owner = document.getElementById('ghOwner').value.trim();
-  GH.repo  = document.getElementById('ghRepo').value.trim();
-  GH.path  = document.getElementById('ghPath').value.trim() || 'data/maliyet.json';
-  saveGhConfig();
-  updateGhStatusBtn();
-  renderGhStatus();
-  toast('GitHub ayarları kaydedildi ✓');
-}
-
-async function ghApiCall(method, body, sha) {
-  const url = 'https://api.github.com/repos/' + GH.owner + '/' + GH.repo + '/contents/' + GH.path;
-  const opts = {
-    method,
-    headers: {
-      'Authorization': 'Bearer ' + GH.token,
-      'Accept': 'application/vnd.github+json',
-      'Content-Type': 'application/json',
-    },
-  };
-  if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(url, opts);
-  return {ok: res.ok, status: res.status, data: await res.json()};
-}
-
-async function testGhConnection() {
-  if (!GH.token || !GH.owner || !GH.repo) {
-    renderGhStatus('⚠️ Token, kullanıcı adı ve repo adını doldurun', 'error'); return;
-  }
-  renderGhStatus('🔄 Test ediliyor...', 'syncing');
-  try {
-    const res = await fetch('https://api.github.com/repos/' + GH.owner + '/' + GH.repo, {
-      headers: { 'Authorization': 'Bearer ' + GH.token, 'Accept': 'application/vnd.github+json' }
-    });
-    const data = await res.json();
-    if (res.ok) renderGhStatus('✅ Bağlantı başarılı: ' + data.full_name + (data.private ? ' 🔒' : ''), 'connected');
-    else renderGhStatus('❌ Hata: ' + (data.message || res.status), 'error');
-  } catch(e) {
-    renderGhStatus('❌ Ağ hatası: ' + e.message, 'error');
-  }
-}
-
-async function ghPush() {
-  if (!ghConfigured()) { toast('Önce GitHub ayarlarını kaydedin'); return; }
-  renderGhStatus('⬆️ GitHub\'a yazılıyor...', 'syncing');
-  try {
-    S.cats = CATS;
-    const content = btoa(unescape(encodeURIComponent(JSON.stringify(S, null, 2))));
-    // Check if file exists (to get sha for update)
-    const check = await ghApiCall('GET');
-    const sha   = check.ok ? check.data.sha : undefined;
-    const body  = {
-      message: '📊 Maliyet güncellendi - ' + new Date().toLocaleString('tr-TR'),
-      content,
-    };
-    if (sha) body.sha = sha;
-    const res = await ghApiCall('PUT', body);
-    if (res.ok) {
-      renderGhStatus('✅ GitHub\'a kaydedildi ✓', 'connected');
-      toast('GitHub\'a kaydedildi ✓');
-    } else {
-      renderGhStatus('❌ ' + (res.data.message || 'Kayıt hatası'), 'error');
-      toast('Kayıt hatası: ' + (res.data.message || res.status));
-    }
-  } catch(e) {
-    renderGhStatus('❌ Hata: ' + e.message, 'error');
-    toast('Hata: ' + e.message);
-  }
-}
-
-async function ghPull() {
-  if (!ghConfigured()) { toast('Önce GitHub ayarlarını kaydedin'); return; }
-  renderGhStatus('⬇️ GitHub\'dan yükleniyor...', 'syncing');
-  try {
-    const res = await ghApiCall('GET');
-    if (!res.ok) {
-      if (res.status === 404) renderGhStatus('⚠️ Dosya bulunamadı — önce ⬆️ Kaydet yapın', 'error');
-      else renderGhStatus('❌ ' + (res.data.message || res.status), 'error');
-      return;
-    }
-    const json = JSON.parse(decodeURIComponent(escape(atob(res.data.content.replace(/\n/g,'')))));
-    if (!json.entries) throw new Error('Geçersiz veri formatı');
-    S = json;
-    if (!S.projects?.length)   S.projects = ['Genel'];
-    if (!S.activeProject)      S.activeProject = 'Genel';
-    if (!S.entries)            S.entries = [];
-    if (!S.cats?.length)       S.cats = JSON.parse(JSON.stringify(DEFAULT_CATS));
-    CATS = S.cats;
-    saveState();
-    render();
-    renderGhStatus('✅ Veriler yüklendi — ' + S.entries.length + ' kayıt', 'connected');
-    toast('GitHub\'dan yüklendi ✓ (' + S.entries.length + ' kayıt)');
-  } catch(e) {
-    renderGhStatus('❌ Hata: ' + e.message, 'error');
-    toast('Yükleme hatası: ' + e.message);
-  }
-}
-
-// ── Render all ─────────────────────────────────────────────────────
-function render() {
-  renderProjects();
-  renderSummary();
-  renderCatBreakdown();
-  renderEntries();
-}
-
-document.addEventListener('keydown', e => {
-  if (e.key==='Escape') { closeEntryModal(); closeCatModal(); closeImportModal(); closeGhModal(); }
-  if ((e.ctrlKey||e.metaKey) && e.key==='n') { e.preventDefault(); openEntryModal(); }
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){closeEntryModal();closeCatModal();closeImportModal();}
+  if((e.ctrlKey||e.metaKey)&&e.key==='n'){e.preventDefault();openEntryModal();}
 });
 
-loadGhConfig();
-loadState();
+// Load local first for instant display, then Firebase overwrites
+loadLocal();
 render();
-updateGhStatusBtn();
+initFirebase();
 </script>
 </body>
 </html>
