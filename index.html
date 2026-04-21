@@ -337,12 +337,7 @@ let isSyncing = false;
 // SYNC STATUS
 // ══════════════════════════════════════════════════════
 function setSyncStatus(type, msg, time) {
-  const bar  = document.getElementById('syncBar');
-  const msgEl= document.getElementById('syncMsg');
-  const timeEl=document.getElementById('syncTime');
-  bar.className = 'sync-bar ' + type;
-  msgEl.textContent = msg;
-  timeEl.textContent = time || '';
+  // sync bar removed from UI, silently ignore
 }
 
 // ══════════════════════════════════════════════════════
